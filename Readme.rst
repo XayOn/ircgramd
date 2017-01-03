@@ -30,6 +30,7 @@ Usage is pretty simple:
 
 - Install telegram_cli
 - Run telegram_cli and authenticate your user
+- Stop telegram_cli
 - Run ``teleirc``
 - Connect your irc server to localhost:6666 and join #telegram
   channel
