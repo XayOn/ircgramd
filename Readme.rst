@@ -32,7 +32,7 @@ Usage is pretty simple:
 - Run telegram_cli and authenticate your user
 - Stop telegram_cli
 - Run ``teleirc``
-- Connect your irc server to localhost:6666 and join #telegram
+- Connect your irc server to localhost/6667 and join #telegram
   channel
 
 Now, you'll see some users have a # before their names on the
