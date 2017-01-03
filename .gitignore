@@ -1,0 +1,5 @@
+.eggs
+*.egg-info
+.*.pyc
+__pycache__
+.*.sw?
