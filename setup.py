@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-    vinisto
+IRCGramD
 """
 
 from setuptools import setup

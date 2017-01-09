@@ -1,27 +1,38 @@
-TeleIRC - IRC<->telegram gateway
----------------------------------
+IRCGramD
+--------
 
-Not my best proyect name, I know.
-
-.. warning:: This is a 3h project. I actually invested
-             3h in writting it all (except this readme,
-             of course).
-             It works, but it'll probably lack things
-             you want
-
+Local IRC Server implementing a telegram-cli gateway.
 
 This project is a telegram to irc gateway (and vice-versa)
 similar bitlbee + libpurple + telegram-purple setup.
+
+
+Why did I do this
+-----------------
 
 After a few hours trying to make bitlbee + telegram-libpurple
 to work on my rpi3, I decided that writing my own would probably
 be easier (and it actually was).
 
+How to make it work
+-------------------
+
 Currently, you need to have telegram-cli installed, and
-the user authenticated. Only one user per system user is allowed
-at a time, and probably port collision will happen if you do it
+the user running the IRCGramD process authenticated.
+Only one user per system user is allowed at a time,
+and probably port collision will happen if you do it
 on multiple users (irc port is hardcoded, as well as default
 port for telegram-cli in pytg).
+
+Security
+--------
+**Warning: this project has no security features whatsoever**
+This means that you are responsible for isolating this server
+in a secure network, allowing access only from your client.
+
+Also, this server's traffic goes unencrypted. OpenVPN will
+probably be cool enough.
+
 
 Usage
 ------
@@ -30,7 +41,7 @@ Usage is pretty simple:
 
 - Install telegram_cli
 - Run telegram_cli and authenticate your user
-- Run ``teleirc``
+- Run ``ircgramd``
 - Connect your irc server to localhost:6666 and join #telegram
   channel
 
@@ -46,3 +57,12 @@ queries...
 
 Apart from that, joining, querying and receiving messages work
 as usual on IRC
+
+
+TODO
+----
+
+- Put channels on /channel list, separate them from the control channel
+- Add port configuration
+- SSL
+- User auth
