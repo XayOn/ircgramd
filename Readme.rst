@@ -63,4 +63,4 @@ TODO
 ----
 
 - SSL
-- User auth
+- Some kind of assistant / documentation for creating new users.

@@ -1,6 +1,6 @@
 """
-Telegram to irc platform
-------------------------
+Telegram to irc gateway
+-----------------------
 
 Usage:
 
@@ -24,21 +24,24 @@ Options:
 import socketserver
 import asyncio
 import functools
+import json
+import hashlib
 from contextlib import suppress
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from irc.events import codes
 from pytg import Telegram, IllegalResponseException
 from pytg.utils import coroutine
-from irc.server import IRCClient
+from irc.server import IRCClient, IRCError
 from docopt import docopt
 
 logging.basicConfig(level=logging.ERROR)
+EXECUTOR = ThreadPoolExecutor(200)
 
 
 class IRCChannel(object):
     """
-    IRC Channel handler.
+    IRC Channel, overwriting topic.
 
     """
     # pylint: disable=too-few-public-methods
@@ -51,8 +54,7 @@ class IRCChannel(object):
 
 def get_user_name(client):
     """
-    If not name is present, return username,
-    if not present, return phone
+    Try to get a username from any telegram user-like object
 
     """
     def get_name(client):
@@ -74,22 +76,73 @@ class TGIrcClient(IRCClient):
     """
     Telegram to irc base client class
 
+    This implements:
+    - Chat handling *
+    - Channel handling *
+    - Private message handling
+    - Channel lists
+    - User lists in chats
+
+    * Both represented as channels in IRC.
+      TODO: Make channels +v and user without voice =)
+
     """
 
     def __init__(self, *args, **kwargs):
         self.nick = get_user_name(self.tgm.sender.whoami())
         super().__init__(*args, **kwargs)
-        self.tgm = self.server.tgm
+        self.tgm = Telegram(**self.server.tgopts, user="+{}".format(self.nick))
         self.control_channel = self.server.control_channel
+
+    @property
+    @functools.lru_cache()
+    def chats(self):
+        """
+        Extract the list of chats from current open dialogs
+
+        """
+        dialogs = self.tgm.sender.dialog_list()
+        return [c for c in dialogs if c['peer_type'] == "chat"]
+
+    @property
+    @functools.lru_cache()
+    def chans(self):
+        """ Retur telegram channel list """
+        return self.tgm.sender.channel_list()
+
+    @property
+    def channels(self):
+        """
+        Return the list of channels available in the server.
+        That being the chats + the channels the user has
+        joined in telegram
+
+        """
+        chats = [get_user_name(chat) for chat in self.chats]
+        chans = [get_user_name(chan) for chan in self.chans]
+        return chats + chans
+
+    @property
+    @functools.lru_cache()
+    def contacts(self):
+        """
+        Return contact list
+
+        .. TODO:: After implementing modes, we should probably make
+                  open dialogs +v
+
+        """
+        return self.tgm.sender.contacts_list()
 
     @staticmethod
     def send_privmsg(from_, to_, msg):
-        """ craft a private message """
+        """ Craft a IRC private message """
         return ':%s PRIVMSG %s %s' % (from_, to_, msg)
 
     def receive_message(self, channel, sender, msg):
         """
-        Send a fake message from anybody
+        Send a fake message from anybody to the user,
+        this enables us to send messages from telegram buddies
 
         """
         for line in msg.split('\n'):
@@ -131,12 +184,6 @@ class TGIrcClient(IRCClient):
             else:
                 self.tgm.sender.send_msg(target, msg[1:].strip())
 
-    @property
-    @functools.lru_cache()
-    def contacts(self):
-        """ Return contact list """
-        return self.tgm.sender.contacts_list()
-
     def handle_names(self, channel):
         """
         handle names command
@@ -171,6 +218,17 @@ class TGIrcClient(IRCClient):
             super().handle_join(channel)
             self.handle_names(channel)
 
+    def handle_nick(self, params):
+        nick, password = params
+        if not self.auth(nick, password):
+            raise IRCError.from_name('nosuchnick', 'Wrong password')
+        super().handle_nick(nick)
+
+    def auth(self, nick, password):
+        """ Check user auth """
+        pass_ = json.load(open('~/.ircgramd_passwords', 'r')).get(nick)
+        return hashlib.sha256(password.encode('utf-8')).hexdigest == pass_
+
 
 class IRCServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """
@@ -181,85 +239,82 @@ class IRCServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
     clients = {}
 
-    @property
-    @functools.lru_cache()
-    def chats(self):
-        """ Return chat list """
-        dialogs = self.tgm.sender.dialog_list()
-        return [c for c in dialogs if c['peer_type'] == "channel"]
-
-    @property
-    @functools.lru_cache()
-    def chans(self):
-        """ Return channel list """
-        return self.tgm.sender.channel_list()
-
-    @property
-    def channels(self):
-        chats = [get_user_name(chat) for chat in self.chats]
-        chans = [get_user_name(chan) for chan in self.chans]
-        return chats + chans
-
     def __init__(self, *args, **kwargs):
         self.servername = 'localhost'
-        self.tgm = args.pop(2)
+        self.tgopts = kwargs['tgopts']
+        self.control_channel = kwargs['control_channel']
         self.clients = {}
         super().__init__(*args, **kwargs)
 
 
-@coroutine
-def message_loop(ircclient):
+def run_receiver(client):
     """
-    Fake message sender
+    Run receiver threat
 
     """
-    def get_chan(msg):
-        if msg.receiver.type == "user":
-            if msg.sender.type == "user":
-                return get_user_name(msg.sender)
-        return "#{}".format(msg.receiver.title.replace(' ', '_'))
 
-    while True:
-        try:
-            msg = (yield)
-            for client in ircclient.clients.keys():
+    @coroutine
+    def message_loop(client):
+        """
+        Fake message sender
+
+        """
+        def get_chan(msg):
+            if msg.receiver.type == "user":
+                if msg.sender.type == "user":
+                    return get_user_name(msg.sender)
+            return "#{}".format(msg.receiver.title.replace(' ', '_'))
+
+        while True:
+            try:
+                msg = (yield)
                 if msg.get('event', False) != "message":
                     continue
                 if not msg.own:
                     chan = get_chan(msg)
                     sender = get_user_name(msg['sender'])
                     msg = msg.get("text", msg.get("media"))
-                    ircclient.clients[client].receive_message(
-                        chan, sender, msg)
-        except (KeyError, ValueError, IndexError) as exception:
-            logging.error(exception)
-        except Exception:
-            logging.exception("Something strange happened")
+                    client.receive_message(chan, sender, msg)
+            except (KeyError, ValueError, IndexError) as exception:
+                logging.error(exception)
+            except Exception:
+                logging.exception("Something strange happened")
+
+    client.tgm.receiver.start()
+    client.tgm.receiver.message(message_loop(client))
 
 
-def run_receiver(ircserver):
-    """ Run receiver """
-    ircserver.tgm.receiver.start()
-    ircserver.tgm.receiver.message(message_loop(ircserver))
+def client_monitor(ircserver):
+    """
+    Monitor for new clients and add a future receiver for each
+    with their phone number.
+
+    """
+    loop = asyncio.get_event_loop()
+    for client in ircserver.clients:
+        if client not in ircserver.watched_clients:
+            ircserver.watched_clients.append(client)
+            asyncio.ensure_future(
+                loop.run_in_executor(
+                    EXECUTOR, functools.partial(run_receiver, client)))
 
 
 def main(**kwargs):
     """ Run irc server """
-    tgopts = {"telegram": "/usr/bin/telegram-cli",
-              "pubkey_file": "/etc/telegram/TG-server.pub"}
+    tgopts = {"telegram": kwargs.get("bin", "/usr/bin/telegram-cli"),
+              "pubkey_file": kwargs.get("key", "/etc/telegram/TG-server.pub")}
     ipport = (kwargs.get('ip', '127.0.0.1'), kwargs.get('port', 6667))
     control_channel = kwargs.get('control_channel', '#telegram')
 
-    ircserver = IRCServer(ipport, TGIrcClient, telegram=Telegram(**tgopts),
+    ircserver = IRCServer(ipport, TGIrcClient, tgopts=tgopts,
                           control_channel=control_channel)
 
     loop = asyncio.get_event_loop()
-    executor = ThreadPoolExecutor(2)
     # pylint: disable=no-member
     asyncio.ensure_future(loop.run_in_executor(
-        executor, functools.partial(run_receiver, ircserver)))
+        EXECUTOR, functools.partial(client_monitor, ircserver)))
     asyncio.ensure_future(loop.run_in_executor(
-        executor, ircserver.serve_forever))
+        EXECUTOR, ircserver.serve_forever))
     loop.run_forever()
     loop.close()
 
