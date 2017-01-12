@@ -62,7 +62,5 @@ as usual on IRC
 TODO
 ----
 
-- Put channels on /channel list, separate them from the control channel
-- Add port configuration
 - SSL
 - User auth
