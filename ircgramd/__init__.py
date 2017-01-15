@@ -2,24 +2,20 @@
 Telegram to irc gateway
 
 Usage:
-    ircgramd --port <PORT_TO_LISTEN_ON> --ip <IP_TO_LISTEN_ON> \
-             --control-channel <CONTROL_CHANNEL>
-
-    irgramd --port <PORT_TO_LISTEN_ON>
-
-    irgramd --ip <IP_TO_LISTEN_ON>
-
-    irgramd --control-channel <CONTROL_CHANNEL>
+    ircgramd --port=<listen_port> --ip=<listen_addr> --channel <control_chan>
+    ircgramd --port=<listen_port>
+    ircgramd --ip <listen_ip>
+    ircgramd --channel <control_channel>
 
 Options:
-    --port            <PORT>    Port to listen on
-    --ip              <IP>      Ip to listen on
-    --control-channel control channel
+    --port=<listen_port>        Port to listen on
+    --ip=<listen_ip>            Ip to listen on
+    --channel=<control channel> Control channel
 
 Examples:
-    ircgramd --port 8080 --ip 127.0.0.1
-    irgramd --control-channel #telegram
-    ircgramd --port 8080 --ip 127.0.0.1 --control-channel #telegram
+    ircgramd --port=8080 --ip 127.0.0.1
+    ircgramd --channel=#telegram
+    ircgramd --port=8080 --ip=127.0.0.1 --channel=#telegram
 
 """
 # pylint: disable=import-error
@@ -302,12 +298,12 @@ def client_monitor(ircserver):
                     EXECUTOR, functools.partial(run_receiver, client)))
 
 
-def main(**kwargs):
+def main():
     """ Run irc server """
-    print(kwargs)
+    kwargs = {k.replace('--', ''): v for k, v in docopt(__doc__).items()}
     tgopts = {"telegram": kwargs.get("bin", "/usr/bin/telegram-cli"),
               "pubkey_file": kwargs.get("key", "/etc/telegram/TG-server.pub")}
-    ipport = (kwargs.get('ip', '127.0.0.1'), kwargs.get('port', 6667))
+    ipport = (kwargs.get('ip', '127.0.0.1'), int(kwargs.get('port', 6667)))
     control_channel = kwargs.get('control_channel', '#telegram')
 
     ircserver = IRCServer(ipport, TGIrcClient, tgopts=tgopts,
@@ -321,7 +317,3 @@ def main(**kwargs):
         EXECUTOR, ircserver.serve_forever))
     loop.run_forever()
     loop.close()
-
-
-if __name__ == "__main__":
-    main({k.replace('--', ''): v for k, v in docopt(__doc__).items()})
