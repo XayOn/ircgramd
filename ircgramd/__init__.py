@@ -1,9 +1,7 @@
 """
 Telegram to irc gateway
------------------------
 
 Usage:
-
     ircgramd --port <PORT_TO_LISTEN_ON> --ip <IP_TO_LISTEN_ON> \
              --control-channel <CONTROL_CHANNEL>
 
@@ -14,9 +12,14 @@ Usage:
     irgramd --control-channel <CONTROL_CHANNEL>
 
 Options:
-    --port <PORT>    Port to listen on
-    --ip   <IP>      Ip to listen on
+    --port            <PORT>    Port to listen on
+    --ip              <IP>      Ip to listen on
     --control-channel control channel
+
+Examples:
+    ircgramd --port 8080 --ip 127.0.0.1
+    irgramd --control-channel #telegram
+    ircgramd --port 8080 --ip 127.0.0.1 --control-channel #telegram
 
 """
 # pylint: disable=import-error
@@ -241,8 +244,8 @@ class IRCServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
     def __init__(self, *args, **kwargs):
         self.servername = 'localhost'
-        self.tgopts = kwargs['tgopts']
-        self.control_channel = kwargs['control_channel']
+        self.tgopts = kwargs.pop('tgopts')
+        self.control_channel = kwargs.pop('control_channel')
         self.clients = {}
         super().__init__(*args, **kwargs)
 
@@ -301,6 +304,7 @@ def client_monitor(ircserver):
 
 def main(**kwargs):
     """ Run irc server """
+    print(kwargs)
     tgopts = {"telegram": kwargs.get("bin", "/usr/bin/telegram-cli"),
               "pubkey_file": kwargs.get("key", "/etc/telegram/TG-server.pub")}
     ipport = (kwargs.get('ip', '127.0.0.1'), kwargs.get('port', 6667))
