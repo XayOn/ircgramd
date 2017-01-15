@@ -86,11 +86,10 @@ class TGIrcClient(IRCClient):
       TODO: Make channels +v and user without voice =)
 
     """
+    tgopts = {}
 
     def __init__(self, *args, **kwargs):
-        self.nick = get_user_name(self.tgm.sender.whoami())
         super().__init__(*args, **kwargs)
-        self.tgm = Telegram(**self.server.tgopts, user="+{}".format(self.nick))
         self.control_channel = self.server.control_channel
 
     @property
@@ -117,9 +116,15 @@ class TGIrcClient(IRCClient):
         joined in telegram
 
         """
+        if not hasattr(self, "tgm"):
+            return {}
         chats = [get_user_name(chat) for chat in self.chats]
         chans = [get_user_name(chan) for chan in self.chans]
-        return chats + chans
+        return {k: IRCChannel(k) for k in chats + chans}
+
+    @channels.setter
+    def channels(self, val):
+        return
 
     @property
     @functools.lru_cache()
@@ -175,7 +180,7 @@ class TGIrcClient(IRCClient):
         with suppress(Exception):
             target, _, msg = params.partition(' ')
             if target.startswith('#'):
-                if target == self.control_channel:
+                if target == self.server.control_channel:
                     target, msg = msg[1:].split(':')
                     self.tgm.sender.send_msg(target, msg[1:].strip())
                 else:
@@ -189,7 +194,7 @@ class TGIrcClient(IRCClient):
 
         """
         for channel in channel.split(','):
-            if channel == self.control_channel:
+            if channel == self.server.control_channel:
                 nicks = [get_user_name(contact) for contact in self.contacts]
             else:
                 channel_ = channel[1:]
@@ -218,9 +223,15 @@ class TGIrcClient(IRCClient):
             self.handle_names(channel)
 
     def handle_nick(self, params):
-        nick, password = params
-        if not self.auth(nick, password):
+        nick = params[0]
+        password = False
+        with suppress(ValueError):
+            nick, password = params
+        if password and not self.auth(nick, password):
             raise IRCError.from_name('nosuchnick', 'Wrong password')
+        self.tgm = Telegram(
+            **self.tgopts, custom_cli_args=('--user', '+{}'.format(nick)))
+        # self.nick = get_user_name(self.tgm.sender.whoami())
         super().handle_nick(nick)
 
     def auth(self, nick, password):
@@ -237,6 +248,7 @@ class IRCServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     daemon_threads = True
     allow_reuse_address = True
     clients = {}
+    channels = {}
 
     def __init__(self, *args, **kwargs):
         self.servername = 'localhost'
@@ -283,13 +295,12 @@ def run_receiver(client):
     client.tgm.receiver.message(message_loop(client))
 
 
-def client_monitor(ircserver):
+def client_monitor(ircserver, loop):
     """
     Monitor for new clients and add a future receiver for each
     with their phone number.
 
     """
-    loop = asyncio.get_event_loop()
     for client in ircserver.clients:
         if client not in ircserver.watched_clients:
             ircserver.watched_clients.append(client)
@@ -305,6 +316,7 @@ def main():
               "pubkey_file": kwargs.get("key", "/etc/telegram/TG-server.pub")}
     ipport = (kwargs.get('ip', '127.0.0.1'), int(kwargs.get('port', 6667)))
     control_channel = kwargs.get('control_channel', '#telegram')
+    TGIrcClient.tgopts = tgopts
 
     ircserver = IRCServer(ipport, TGIrcClient, tgopts=tgopts,
                           control_channel=control_channel)
@@ -312,7 +324,7 @@ def main():
     loop = asyncio.get_event_loop()
     # pylint: disable=no-member
     asyncio.ensure_future(loop.run_in_executor(
-        EXECUTOR, functools.partial(client_monitor, ircserver)))
+        EXECUTOR, functools.partial(client_monitor, ircserver, loop)))
     asyncio.ensure_future(loop.run_in_executor(
         EXECUTOR, ircserver.serve_forever))
     loop.run_forever()
