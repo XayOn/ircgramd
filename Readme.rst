@@ -71,4 +71,5 @@ TODO
 
 - SSL
 - Some kind of assistant / documentation for creating new users.
-- Make channels work again (Channels work, but /names not)
+- Make channels work again (Channels work, but /list not)
+
