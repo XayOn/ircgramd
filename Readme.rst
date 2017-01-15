@@ -38,30 +38,37 @@ probably be cool enough.
 Usage
 ------
 
+::
+
+    Telegram to irc gateway
+
+    Usage:
+        ircgramd --port=<listen_port> --ip=<listen_addr> --channel <control_chan>
+        ircgramd --port=<listen_port>
+        ircgramd --ip <listen_ip>
+        ircgramd --channel <control_channel>
+
+    Options:
+        --port=<listen_port>        Port to listen on
+        --ip=<listen_ip>            Ip to listen on
+        --channel=<control channel> Control channel
+
+    Examples:
+        ircgramd --port=8080 --ip 127.0.0.1
+        ircgramd --channel=#telegram
+        ircgramd --port=8080 --ip=127.0.0.1 --channel=#telegram
+
+
 Usage is pretty simple:
 
 - Install telegram_cli
 - Run telegram_cli and authenticate your user
 - Run ``ircgramd``
-- Connect your irc server to localhost:6666 and join #telegram
-  channel
-
-Now, you'll see some users have a # before their names on the
-#telegram channel. That's so you can use autocomplete on
-/join to not miss the channels name, but they're not actually
-users and talking to them directly from the #telegram channel
-will probably work not-so-fine.
-
-Also, I'd recommend not using #telegram channel at all except
-for the userlist, as user responses will always go on private
-queries...
-
-Apart from that, joining, querying and receiving messages work
-as usual on IRC
-
+- Connect your irc client and join your specified control channel
 
 TODO
 ----
 
 - SSL
 - Some kind of assistant / documentation for creating new users.
+- Make channels work again
