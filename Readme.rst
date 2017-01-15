@@ -17,12 +17,13 @@ be easier (and it actually was).
 How to make it work
 -------------------
 
-Currently, you need to have telegram-cli installed, and
-the user running the IRCGramD process authenticated.
-Only one user per system user is allowed at a time,
-and probably port collision will happen if you do it
-on multiple users (irc port is hardcoded, as well as default
-port for telegram-cli in pytg).
+Currently, you need to have telegram-cli installed
+and the phones you're going to use authenticated (see telegram-cli --user)
+The nick you send to the irc server will be used as your telegram user,
+wich must be YOUR PHONE.
+**This is important, your nick on the telegram server must be your phone
+including contry code (without the initial 00 or the +).
+For example, 34671666617 NOT +34671666617 or 0034...**
 
 Security
 --------
